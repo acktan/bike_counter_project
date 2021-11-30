@@ -11,7 +11,8 @@ from sklearn.ensemble import HistGradientBoostingRegressor
 
 __file__ = Path('submissions') /  'external_data' /  'estimator.py'
 
-def _cycl_encode(X):
+def _encode(X):
+    #cyclical encoding of dates
     X = X.copy()
     year_norm = 2 * math.pi * X['date'].dt.year / X['date'].dt.year.max()
     month_norm = 2 * math.pi * X['date'].dt.month / X['date'].dt.month.max()
@@ -28,7 +29,12 @@ def _cycl_encode(X):
     X.loc[:, 'weekday_cos'] = np.cos(weekday_norm)
     X.loc[:, 'hour_sin'] = np.sin(hour_norm)
     X.loc[:, 'hour_cos'] = np.cos(hour_norm)
-
+    #encode dates
+    X.loc[:, 'year'] = X['date'].dt.year
+    X.loc[:, 'month'] = X['date'].dt.month
+    X.loc[:, 'day'] = X['date'].dt.day
+    X.loc[:, 'weekday'] = X['date'].dt.weekday
+    X.loc[:, 'hour'] = X['date'].dt.hour
     return X.drop(columns=["date"]) 
 
 
@@ -44,41 +50,27 @@ def _merge_external_data(X):
     del X['orig_index']
     return X
 
-def _encode_dates(X):
-    X = X.copy()  # modify a copy of X
-    # Encode the date information from the DateOfDeparture columns
-    X.loc[:, 'year'] = X['date'].dt.year
-    X.loc[:, 'month'] = X['date'].dt.month
-    X.loc[:, 'day'] = X['date'].dt.day
-    X.loc[:, 'weekday'] = X['date'].dt.weekday
-    X.loc[:, 'hour'] = X['date'].dt.hour
-
-    return X.drop(columns=["date"]) 
-
-    # Finally we can drop the original columns from the dataframe
-
 def get_estimator():
-    #date_encoder = FunctionTransformer(_encode_dates)
-    #date_cols = ['year', 'month', 'day', 'weekday', 'hour']
-
-    cycl_encoder = FunctionTransformer(_cycl_encode)
-    cycl_cols = ['year_sin', 'year_cos', 'month_sin', 'month_cos', 'day_sin', 'day_cos', 'weekday_sin', 'weekday_cos', 'hour_sin', 'hour_cos']
+    date_encoder = FunctionTransformer(_encode)
+    cycl_cols = ['month_sin', 'month_cos', 'day_sin', 'day_cos', 'weekday_sin', 'weekday_cos', 'hour_sin', 'hour_cos']
 
     categorical_encoder = OrdinalEncoder(handle_unknown='use_encoded_value', unknown_value=-1)
     categorical_cols = ["site_name", "counter_name"]
-
-    numeric_cols = ['t', 'ff', 'u', 'brent', 'bank_hol', 'vacances_scol']
+    #holiday_cols =  ['bank_hol', 'vacances_scol']
+    #numeric_cols = ['t', 'ff', 'u', 'brent']
 
     preprocessor = ColumnTransformer(
         [
             ('date', 'passthrough', cycl_cols),
+            ('year', 'passthrough', ['year']),
+            #('holiday', 'passthrough', holiday_cols),
             ('cat', categorical_encoder, categorical_cols),
-            ('numeric', 'passthrough', numeric_cols)
+            #('numeric', 'passthrough', numeric_cols)
         ]
     )
-    regressor = HistGradientBoostingRegressor(random_state=0)
+    regressor = HistGradientBoostingRegressor(max_depth=3, learning_rate=1, criterion='mse')
 
     pipe = make_pipeline(
-        FunctionTransformer(_merge_external_data, validate=False), cycl_encoder, preprocessor, regressor)
+        FunctionTransformer(_merge_external_data, validate=False), date_encoder, preprocessor, regressor)
 
     return pipe
