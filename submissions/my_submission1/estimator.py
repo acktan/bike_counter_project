@@ -56,7 +56,7 @@ def get_estimator():
     categorical_encoder = OrdinalEncoder(handle_unknown='use_encoded_value', unknown_value=-1)
     categorical_cols = ["site_name", "counter_name"]
     binary_cols =  ['curfew']
-    numeric_cols = ['Taux', 'bike', 't', 'brent', 'ff']
+    numeric_cols = ['Taux', 'bike', 't', 'brent', 'u']
 
     preprocessor = ColumnTransformer(
         [
