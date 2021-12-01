@@ -3,22 +3,21 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-import math
 from sklearn.preprocessing import OneHotEncoder, StandardScaler, OrdinalEncoder, FunctionTransformer
 from sklearn.pipeline import make_pipeline
 from sklearn.compose import ColumnTransformer
 from sklearn.ensemble import HistGradientBoostingRegressor
 
-__file__ = Path('submissions') /  'external_data' /  'estimator.py'
+#__file__ = Path('submissions') /  'my_submission1' /  'estimator.py'
 
 def _encode(X):
     #cyclical encoding of dates
     X = X.copy()
-    year_norm = 2 * math.pi * X['date'].dt.year / X['date'].dt.year.max()
-    month_norm = 2 * math.pi * X['date'].dt.month / X['date'].dt.month.max()
-    day_norm = 2 * math.pi * X['date'].dt.day / X['date'].dt.day.max()
-    weekday_norm = 2 * math.pi * X['date'].dt.weekday / X['date'].dt.weekday.max()
-    hour_norm = 2 * math.pi * X['date'].dt.hour / X['date'].dt.hour.max()
+    year_norm = 2 * np.pi * X['date'].dt.year / X['date'].dt.year.max()
+    month_norm = 2 * np.pi * X['date'].dt.month / X['date'].dt.month.max()
+    day_norm = 2 * np.pi * X['date'].dt.day / X['date'].dt.day.max()
+    weekday_norm = 2 * np.pi * X['date'].dt.weekday / X['date'].dt.weekday.max()
+    hour_norm = 2 * np.pi * X['date'].dt.hour / X['date'].dt.hour.max()
     X.loc[:, 'year_sin'] = np.sin(year_norm)
     X.loc[:, 'year_cos'] = np.cos(year_norm)
     X.loc[:, 'month_sin'] = np.sin(month_norm)
@@ -44,7 +43,7 @@ def _merge_external_data(X):
     X = X.copy()
     # When using merge_asof left frame need to be sorted
     X['orig_index'] = np.arange(X.shape[0])
-    X = pd.merge_asof(X.sort_values('date'), df_ext[['date', 't', 'ff', 'u', 'brent', 'vacances_scol', 'bank_hol']].sort_values('date'), on='date')
+    X = pd.merge_asof(X.sort_values('date'), df_ext[['date', 't', 'ff', 'u', 'brent', 'holidays', 'curfew']].sort_values('date'), on='date')
     # Sort back to the original order
     X = X.sort_values('orig_index')
     del X['orig_index']
@@ -52,23 +51,24 @@ def _merge_external_data(X):
 
 def get_estimator():
     date_encoder = FunctionTransformer(_encode)
-    cycl_cols = ['month_sin', 'month_cos', 'day_sin', 'day_cos', 'weekday_sin', 'weekday_cos', 'hour_sin', 'hour_cos']
+    cycl_cols = ['month_sin', 'month_cos','day_sin', 'day_cos', 'weekday_sin', 'weekday_cos', 'hour_sin', 'hour_cos']
+    date_cols = ['year', 'day']
 
     categorical_encoder = OrdinalEncoder(handle_unknown='use_encoded_value', unknown_value=-1)
     categorical_cols = ["site_name", "counter_name"]
-    #holiday_cols =  ['bank_hol', 'vacances_scol']
-    #numeric_cols = ['t', 'ff', 'u', 'brent']
+    holiday_cols =  ['curfew']
+    #numeric_cols = ['brent']
 
     preprocessor = ColumnTransformer(
         [
-            ('date', 'passthrough', cycl_cols),
-            ('year', 'passthrough', ['year']),
-            #('holiday', 'passthrough', holiday_cols),
-            ('cat', categorical_encoder, categorical_cols),
+            ('date', 'passthrough', date_cols),
+            ('cycl', 'passthrough', cycl_cols),
+            ('holiday', 'passthrough', holiday_cols),
+            ('cat', categorical_encoder, categorical_cols)
             #('numeric', 'passthrough', numeric_cols)
         ]
     )
-    regressor = HistGradientBoostingRegressor(max_depth=3, learning_rate=1, criterion='mse')
+    regressor = HistGradientBoostingRegressor(random_state=0, max_leaf_nodes=275)
 
     pipe = make_pipeline(
         FunctionTransformer(_merge_external_data, validate=False), date_encoder, preprocessor, regressor)
