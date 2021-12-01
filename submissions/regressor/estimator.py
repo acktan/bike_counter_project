@@ -1,12 +1,14 @@
-#histgradboost
+#linear regression
 import pandas as pd
 from pathlib import Path
 import numpy as np
 import pandas as pd
+from sklearn import linear_model
 from sklearn.preprocessing import OneHotEncoder, StandardScaler, OrdinalEncoder, FunctionTransformer
 from sklearn.pipeline import make_pipeline
 from sklearn.compose import ColumnTransformer
 from sklearn.ensemble import HistGradientBoostingRegressor
+from sklearn.linear_model import LinearRegression
 
 #__file__ = Path('submissions') /  'my_submission1' /  'estimator.py'
 
@@ -42,7 +44,7 @@ def _merge_external_data(X):
     X = X.copy()
     # When using merge_asof left frame need to be sorted
     X['orig_index'] = np.arange(X.shape[0])
-    X = pd.merge_asof(X.sort_values('date'), df_ext[['date', 't', 'ff', 'u', 'brent', 'holidays', 'curfew', 'rush hour', 'Taux', 'bike']].sort_values('date'), on='date')
+    X = pd.merge_asof(X.sort_values('date'), df_ext[['date', 't', 'ff', 'u', 'brent', 'holidays', 'curfew', 'rush hour']].sort_values('date'), on='date')
     # Sort back to the original order
     X = X.sort_values('orig_index')
     del X['orig_index']
@@ -55,19 +57,19 @@ def get_estimator():
 
     categorical_encoder = OrdinalEncoder(handle_unknown='use_encoded_value', unknown_value=-1)
     categorical_cols = ["site_name", "counter_name"]
-    binary_cols =  ['curfew']
-    numeric_cols = ['Taux', 'bike', 't', 'brent', 'ff']
+    #holiday_cols =  ['curfew', 'rush hour']
+    #numeric_cols = ['brent']
 
     preprocessor = ColumnTransformer(
         [
             ('date', 'passthrough', date_cols),
             ('cycl', 'passthrough', cycl_cols),
-            ('holiday', 'passthrough', binary_cols),
-            ('cat', categorical_encoder, categorical_cols),
-            ('numeric', 'passthrough', numeric_cols)
+            #('holiday', 'passthrough', holiday_cols),
+            ('cat', categorical_encoder, categorical_cols)
+            #('numeric', 'passthrough', numeric_cols)
         ]
     )
-    regressor = HistGradientBoostingRegressor(random_state=0, max_leaf_nodes=300, max_iter=150)
+    regressor = LinearRegression()
 
     pipe = make_pipeline(
         FunctionTransformer(_merge_external_data, validate=False), date_encoder, preprocessor, regressor)
