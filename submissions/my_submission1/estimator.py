@@ -42,7 +42,7 @@ def _merge_external_data(X):
     X = X.copy()
     # When using merge_asof left frame need to be sorted
     X['orig_index'] = np.arange(X.shape[0])
-    X = pd.merge_asof(X.sort_values('date'), df_ext[['date', 't', 'ff', 'u', 'brent', 'holidays', 'curfew', 'rush hour', 'Taux', 'bike']].sort_values('date'), on='date')
+    X = pd.merge_asof(X.sort_values('date'), df_ext[['date', 't', 'ff', 'u', 'brent', 'holidays', 'curfew', 'rush hour', 'Taux', 'bike', 'rr3', 'ht_neige']].sort_values('date'), on='date')
     # Sort back to the original order
     X = X.sort_values('orig_index')
     del X['orig_index']
@@ -56,7 +56,7 @@ def get_estimator():
     categorical_encoder = OrdinalEncoder(handle_unknown='use_encoded_value', unknown_value=-1)
     categorical_cols = ["site_name", "counter_name"]
     binary_cols =  ['curfew']
-    numeric_cols = ['Taux', 'bike', 't', 'brent', 'u']
+    numeric_cols = ['Taux', 't', 'bike', 'brent', 'u']
 
     preprocessor = ColumnTransformer(
         [
