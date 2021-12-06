@@ -68,7 +68,7 @@ def get_estimator():
         ]
     )
 
-    regressor = lgb.LGBMRegressor(n_estimators=300, num_leaves=150, importance_type='gain', max_depth=200, random_state=0)
+    regressor = lgb.LGBMRegressor(n_estimators=275, num_leaves=150, importance_type='gain', max_depth=200, learning_rate=0.09, random_state=0)
 
     pipe = make_pipeline(
         FunctionTransformer(_merge_external_data, validate=False), date_encoder, preprocessor, regressor)
