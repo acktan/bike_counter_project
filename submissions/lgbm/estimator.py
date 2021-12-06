@@ -1,4 +1,3 @@
-#histgradboost
 import pandas as pd
 from pathlib import Path
 import numpy as np
@@ -7,9 +6,10 @@ from sklearn.preprocessing import OneHotEncoder, StandardScaler, OrdinalEncoder,
 from sklearn.pipeline import make_pipeline
 from sklearn.compose import ColumnTransformer
 from sklearn.ensemble import HistGradientBoostingRegressor
-    
+import lightgbm as lgb
+
 #__file__ = Path('submissions') /  'my_submission1' /  'estimator.py'
-    
+ 
 def _encode(X):
     #cyclical encoding of dates
     X = X.copy()
@@ -35,7 +35,7 @@ def _encode(X):
     X.loc[:, 'weekday'] = X['date'].dt.weekday
     X.loc[:, 'hour'] = X['date'].dt.hour
     return X.drop(columns=["date"]) 
-    
+ 
 def _merge_external_data(X):
     file_path = Path(__file__).parent / 'external_data.csv'
     df_ext = pd.read_csv(file_path, parse_dates=['date'])
@@ -47,17 +47,17 @@ def _merge_external_data(X):
     X = X.sort_values('orig_index')
     del X['orig_index']
     return X
-    
+ 
 def get_estimator():
     date_encoder = FunctionTransformer(_encode)
     cycl_cols = ['month_sin', 'month_cos','day_sin', 'day_cos', 'weekday_sin', 'weekday_cos', 'hour_sin', 'hour_cos']
     date_cols = ['year', 'day']
-    
+ 
     categorical_encoder = OrdinalEncoder(handle_unknown='use_encoded_value', unknown_value=-1)
     categorical_cols = ["site_name", "counter_name"]
     binary_cols =  ['curfew']
     numeric_cols = ['Taux', 'bike', 't', 'brent', 'ff', 'u']
-    
+ 
     preprocessor = ColumnTransformer(
         [
             ('date', 'passthrough', date_cols),
@@ -67,9 +67,10 @@ def get_estimator():
             ('numeric', 'passthrough', numeric_cols)
         ]
     )
-    regressor = HistGradientBoostingRegressor(random_state=0, max_leaf_nodes=300, max_iter=125)
-    
+
+    regressor = lgb.LGBMRegressor(n_estimators=300, num_leaves=150, importance_type='gain', random_state=0)
+
     pipe = make_pipeline(
         FunctionTransformer(_merge_external_data, validate=False), date_encoder, preprocessor, regressor)
-    
+
     return pipe
