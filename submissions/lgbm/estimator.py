@@ -55,20 +55,20 @@ def get_estimator():
  
     categorical_encoder = OrdinalEncoder(handle_unknown='use_encoded_value', unknown_value=-1)
     categorical_cols = ["site_name", "counter_name"]
-    binary_cols =  ['curfew']
+    binary_cols =  ['curfew', 'rush hour']
     numeric_cols = ['Taux', 'bike', 't', 'brent', 'ff', 'u']
  
     preprocessor = ColumnTransformer(
         [
             ('date', 'passthrough', date_cols),
             ('cycl', 'passthrough', cycl_cols),
-            ('holiday', 'passthrough', binary_cols),
+            ('holiday', 'passthrough', binary_cols),  
             ('cat', categorical_encoder, categorical_cols),
             ('numeric', 'passthrough', numeric_cols)
         ]
     )
 
-    regressor = lgb.LGBMRegressor(n_estimators=300, num_leaves=150, importance_type='gain', random_state=0)
+    regressor = lgb.LGBMRegressor(n_estimators=300, num_leaves=150, importance_type='gain', max_depth=200, random_state=0)
 
     pipe = make_pipeline(
         FunctionTransformer(_merge_external_data, validate=False), date_encoder, preprocessor, regressor)
