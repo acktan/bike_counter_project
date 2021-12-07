@@ -5,11 +5,24 @@ import pandas as pd
 from sklearn.preprocessing import OneHotEncoder, StandardScaler, OrdinalEncoder, FunctionTransformer
 from sklearn.pipeline import make_pipeline
 from sklearn.compose import ColumnTransformer
-from sklearn.ensemble import HistGradientBoostingRegressor
+from sklearn.preprocessing import SplineTransformer
 import lightgbm as lgb
+from sklearn.preprocessing import PolynomialFeatures
+from sklearn.pipeline import FeatureUnion
+from sklearn.kernel_approximation import Nystroem 
 
-#__file__ = Path('submissions') /  'my_submission1' /  'estimator.py'
- 
+def periodic_spline_transformer(period, n_splines=None, degree=3):
+    if n_splines is None:
+        n_splines = period
+    n_knots = n_splines + 1  # periodic and include_bias is True
+    return SplineTransformer(
+        degree=degree,
+        n_knots=n_knots,
+        knots=np.linspace(0, period, n_knots).reshape(n_knots, 1),
+        extrapolation="periodic",
+        include_bias=True,
+    )
+
 def _encode(X):
     #cyclical encoding of dates
     X = X.copy()
@@ -34,6 +47,7 @@ def _encode(X):
     X.loc[:, 'day'] = X['date'].dt.day
     X.loc[:, 'weekday'] = X['date'].dt.weekday
     X.loc[:, 'hour'] = X['date'].dt.hour
+    X.loc[:, 'is_weekend'] = np.where(X['weekday'].isin([5,6]), 1,0)
     return X.drop(columns=["date"]) 
  
 def _merge_external_data(X):
@@ -42,33 +56,41 @@ def _merge_external_data(X):
     X = X.copy()
     # When using merge_asof left frame need to be sorted
     X['orig_index'] = np.arange(X.shape[0])
-    X = pd.merge_asof(X.sort_values('date'), df_ext[['date', 't', 'ff', 'u', 'brent', 'holidays', 'curfew', 'rush hour', 'Taux', 'bike']].sort_values('date'), on='date')
+    X = pd.merge_asof(X.sort_values('date'), df_ext[['date', 't', 'ff', 'u', 'brent', 'holidays', 'curfew', 'rush hour', 'Taux', 'workplace', 'transit']].sort_values('date'), on='date')
     # Sort back to the original order
     X = X.sort_values('orig_index')
     del X['orig_index']
     return X
- 
+
+
+
 def get_estimator():
+    #columns
     date_encoder = FunctionTransformer(_encode)
-    cycl_cols = ['month_sin', 'month_cos','day_sin', 'day_cos', 'weekday_sin', 'weekday_cos', 'hour_sin', 'hour_cos']
+    #cycl_cols = ['month_sin', 'month_cos','day_sin', 'day_cos', 'weekday_sin', 'weekday_cos', 'hour_sin', 'hour_cos']
     date_cols = ['year', 'day']
  
     categorical_encoder = OrdinalEncoder(handle_unknown='use_encoded_value', unknown_value=-1)
     categorical_cols = ["site_name", "counter_name"]
-    binary_cols =  ['curfew', 'rush hour']
-    numeric_cols = ['Taux', 'bike', 't', 'brent', 'ff', 'u']
+    binary_cols =  ['curfew', 'rush hour', 'is_weekend']
+    numeric_cols = ['Taux', 't', 'brent', 'ff', 'u', 'transit', 'workplace']
  
+    #preprocessor
+        
     preprocessor = ColumnTransformer(
         [
             ('date', 'passthrough', date_cols),
-            ('cycl', 'passthrough', cycl_cols),
+            #('cycl', 'passthrough', cycl_cols),
+            ("cyclic_month", periodic_spline_transformer(12, n_splines=6), ["month"]),
+            ("cyclic_weekday", periodic_spline_transformer(7, n_splines=3), ["weekday"]),
+            ("cyclic_hour", periodic_spline_transformer(24, n_splines=12), ["hour"]),
             ('holiday', 'passthrough', binary_cols),  
             ('cat', categorical_encoder, categorical_cols),
             ('numeric', 'passthrough', numeric_cols)
         ]
     )
 
-    regressor = lgb.LGBMRegressor(n_estimators=275, num_leaves=150, importance_type='gain', max_depth=200, learning_rate=0.09, random_state=0)
+    regressor = lgb.LGBMRegressor(n_estimators=275, num_leaves=150, importance_type='gain', random_state=0)
 
     pipe = make_pipeline(
         FunctionTransformer(_merge_external_data, validate=False), date_encoder, preprocessor, regressor)
