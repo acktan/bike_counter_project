@@ -2,8 +2,8 @@ import pandas as pd
 from pathlib import Path
 import numpy as np
 import pandas as pd
-from sklearn.preprocessing import OneHotEncoder, StandardScaler, OrdinalEncoder, FunctionTransformer
-from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import OneHotEncoder, StandardScaler, OrdinalEncoder, FunctionTransformer, PolynomialFeatures
+from sklearn.pipeline import make_pipeline, FeatureUnion
 from sklearn.compose import ColumnTransformer
 from sklearn.preprocessing import SplineTransformer
 import lightgbm as lgb
@@ -48,6 +48,7 @@ def _encode(X):
     X.loc[:, 'weekday'] = X['date'].dt.weekday
     X.loc[:, 'hour'] = X['date'].dt.hour
     X.loc[:, 'is_weekend'] = np.where(X['weekday'].isin([5,6]), 1,0)
+    X.loc[:, 'workday'] = np.where(X['weekday'].isin([0,4]), 1,0)
     return X.drop(columns=["date"]) 
  
 def _merge_external_data(X):
@@ -89,10 +90,26 @@ def get_estimator():
             ('numeric', 'passthrough', numeric_cols)
         ]
     )
+    hour_workday_interaction = make_pipeline(
+        ColumnTransformer(
+            [
+            ("cyclic_hour", periodic_spline_transformer(24, n_splines=12), ["hour"]),
+            ("weekday", FunctionTransformer(lambda x: x == "True"), ["workday"]),
+            ]
+        ),
+        PolynomialFeatures(degree=2, interaction_only=True, include_bias=False),
+    )
 
     regressor = lgb.LGBMRegressor(n_estimators=275, num_leaves=150, importance_type='gain', random_state=0)
 
     pipe = make_pipeline(
-        FunctionTransformer(_merge_external_data, validate=False), date_encoder, preprocessor, regressor)
+        FunctionTransformer(_merge_external_data, validate=False),
+        date_encoder,
+        FeatureUnion(
+            [('without', preprocessor),
+             ('with', hour_workday_interaction)
+             ]
+        ),
+        regressor)
 
     return pipe

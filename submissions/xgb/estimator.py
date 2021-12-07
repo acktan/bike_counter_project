@@ -6,10 +6,23 @@ from sklearn.preprocessing import OneHotEncoder, StandardScaler, OrdinalEncoder,
 from sklearn.pipeline import make_pipeline
 from sklearn.compose import ColumnTransformer
 from sklearn.ensemble import HistGradientBoostingRegressor
-import lightgbm as lgb
 import xgboost as xgb
+from sklearn.preprocessing import SplineTransformer
+
 #__file__ = Path('submissions') /  'my_submission1' /  'estimator.py'
  
+def periodic_spline_transformer(period, n_splines=None, degree=3):
+    if n_splines is None:
+        n_splines = period
+    n_knots = n_splines + 1  # periodic and include_bias is True
+    return SplineTransformer(
+        degree=degree,
+        n_knots=n_knots,
+        knots=np.linspace(0, period, n_knots).reshape(n_knots, 1),
+        extrapolation="periodic",
+        include_bias=True,
+    )
+
 def _encode(X):
     #cyclical encoding of dates
     X = X.copy()
@@ -42,7 +55,7 @@ def _merge_external_data(X):
     X = X.copy()
     # When using merge_asof left frame need to be sorted
     X['orig_index'] = np.arange(X.shape[0])
-    X = pd.merge_asof(X.sort_values('date'), df_ext[['date', 't', 'ff', 'u', 'brent', 'holidays', 'curfew', 'rush hour', 'Taux', 'bike']].sort_values('date'), on='date')
+    X = pd.merge_asof(X.sort_values('date'), df_ext[['date', 't', 'ff', 'u', 'brent', 'holidays', 'curfew', 'rush hour', 'Taux', 'transit']].sort_values('date'), on='date')
     # Sort back to the original order
     X = X.sort_values('orig_index')
     del X['orig_index']
@@ -50,24 +63,28 @@ def _merge_external_data(X):
  
 def get_estimator():
     date_encoder = FunctionTransformer(_encode)
-    cycl_cols = ['month_sin', 'month_cos','day_sin', 'day_cos', 'weekday_sin', 'weekday_cos', 'hour_sin', 'hour_cos']
+    #cycl_cols = ['month_sin', 'month_cos','day_sin', 'day_cos', 'weekday_sin', 'weekday_cos', 'hour_sin', 'hour_cos']
     date_cols = ['year', 'day']
- 
+
     categorical_encoder = OrdinalEncoder(handle_unknown='use_encoded_value', unknown_value=-1)
     categorical_cols = ["site_name", "counter_name"]
-    binary_cols =  ['curfew']
-    numeric_cols = ['Taux', 'bike', 't', 'brent', 'ff', 'u']
- 
+    binary_cols =  ['curfew', 'rush hour']
+    numeric_cols = ['Taux', 't', 'brent', 'ff', 'u', 'transit']
+
+    #preprocessor
+
     preprocessor = ColumnTransformer(
         [
             ('date', 'passthrough', date_cols),
-            ('cycl', 'passthrough', cycl_cols),
-            ('holiday', 'passthrough', binary_cols),
+            #('cycl', 'passthrough', cycl_cols),
+            ("cyclic_month", periodic_spline_transformer(12, n_splines=6), ["month"]),
+            ("cyclic_weekday", periodic_spline_transformer(7, n_splines=3), ["weekday"]),
+            ("cyclic_hour", periodic_spline_transformer(24, n_splines=12), ["hour"]),
+            ('holiday', 'passthrough', binary_cols),  
             ('cat', categorical_encoder, categorical_cols),
             ('numeric', 'passthrough', numeric_cols)
         ]
     )
-
     regressor = xgb.XGBRegressor()
 
     pipe = make_pipeline(
