@@ -25,13 +25,6 @@ def periodic_spline_transformer(period, n_splines=None, degree=3):
         include_bias=True,
     )
   
-def imputer(X):
-    X = SimpleImputer(X, missing_values=np.nan)
-    return X
-
-
-
-
 def _encode(X):
     #cyclical encoding of dates
     X = X.copy()
@@ -108,7 +101,7 @@ def get_estimator():
         PolynomialFeatures(degree=2, interaction_only=True, include_bias=False),
     )
 
-    regressor = lgb.LGBMRegressor(n_estimators=275, num_leaves=150, importance_type='gain', random_state=0)
+    regressor = lgb.LGBMRegressor(n_estimators=275, num_leaves=150, random_state=0)
 
     pipe = make_pipeline(
         FunctionTransformer(_merge_external_data, validate=False),
@@ -117,6 +110,7 @@ def get_estimator():
             [('without', preprocessor),
              ('with', hour_workday_interaction)
             ]
-        ), regressor)
+        ), 
+        regressor)
 
     return pipe
