@@ -1,3 +1,4 @@
+from numpy.lib.shape_base import apply_along_axis
 import pandas as pd
 from pathlib import Path
 import numpy as np
@@ -9,7 +10,8 @@ from sklearn.preprocessing import SplineTransformer
 import lightgbm as lgb
 from sklearn.preprocessing import PolynomialFeatures
 from sklearn.pipeline import FeatureUnion
-from sklearn.kernel_approximation import Nystroem 
+from sklearn.impute import SimpleImputer
+from sklearn.kernel_approximation import Nystroem
 
 def periodic_spline_transformer(period, n_splines=None, degree=3):
     if n_splines is None:
@@ -22,6 +24,13 @@ def periodic_spline_transformer(period, n_splines=None, degree=3):
         extrapolation="periodic",
         include_bias=True,
     )
+  
+def imputer(X):
+    X = SimpleImputer(X, missing_values=np.nan)
+    return X
+
+
+
 
 def _encode(X):
     #cyclical encoding of dates
@@ -47,7 +56,6 @@ def _encode(X):
     X.loc[:, 'day'] = X['date'].dt.day
     X.loc[:, 'weekday'] = X['date'].dt.weekday
     X.loc[:, 'hour'] = X['date'].dt.hour
-    X.loc[:, 'is_weekend'] = np.where(X['weekday'].isin([5,6]), 1,0)
     X.loc[:, 'workday'] = np.where(X['weekday'].isin([0,4]), 1,0)
     return X.drop(columns=["date"]) 
  
@@ -63,14 +71,14 @@ def _merge_external_data(X):
     del X['orig_index']
     return X
 
-
-
 def get_estimator():
     #columns
     date_encoder = FunctionTransformer(_encode)
     #cycl_cols = ['month_sin', 'month_cos','day_sin', 'day_cos', 'weekday_sin', 'weekday_cos', 'hour_sin', 'hour_cos']
     date_cols = ['year', 'day']
- 
+
+    #FunctionTransformer(imputer)
+
     categorical_encoder = OrdinalEncoder(handle_unknown='use_encoded_value', unknown_value=-1)
     categorical_cols = ["site_name", "counter_name"]
     binary_cols =  ['curfew', 'rush hour']
@@ -108,8 +116,7 @@ def get_estimator():
         FeatureUnion(
             [('without', preprocessor),
              ('with', hour_workday_interaction)
-             ]
-        ),
-        regressor)
+            ]
+        ), Nystroem(kernel="poly", degree=2, n_components=300, random_state=0), regressor)
 
     return pipe
