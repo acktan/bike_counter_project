@@ -117,6 +117,6 @@ def get_estimator():
             [('without', preprocessor),
              ('with', hour_workday_interaction)
             ]
-        ), Nystroem(kernel="poly", degree=2, n_components=300, random_state=0), regressor)
+        ), regressor)
 
     return pipe
